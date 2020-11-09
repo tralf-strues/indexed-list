@@ -23,11 +23,10 @@ static uint32_t LIST_ARRAY_CANARY_L = 0xBADC0FFE;
 static uint32_t LIST_ARRAY_CANARY_R = 0xDEADBEEF;
 #endif
 
-static double      LIST_EXPAND_MULTIPLIER   = 1.8;
 static size_t      LIST_DEFAULT_CAPACITY    = 16;
-static size_t      LIST_MINIMAL_CAPACITY    = 4;
-static const char* LIST_GRAPH_TXT_FILE_NAME = "log/list_dump.txt";
-static const char* LIST_GRAPH_IMG_FILE_NAME = "log/list_dump.svg";
+static const char* LIST_GRAPH_TXT_FILE_NAME = "list_dump.txt";
+static const char* LIST_GRAPH_IMG_FILE_NAME = "list_dump.svg";
+static const char* LIST_LOG_FOLDER          = "log/";
 
 #ifdef LIST_DEBUG_MODE
 static const char* LIST_DYNAMICALLY_CREATED_NAME = "no name, created dynamically";
@@ -75,14 +74,14 @@ struct List
     size_t     size          = 0;
     size_t     capacity      = 0;
 
-    int        head          = -1;
-    int        tail          = -1;
-    int        free          = -1;
-    bool       searchEnabled = false;
+    size_t     head          = 0;
+    size_t     tail          = 0;
+    size_t     free          = 0;
+    bool       searchEnabled = true;
     uint32_t   errorStatus   = 0;
 
     #ifdef LIST_DEBUG_MODE
-    ListStatus status        = LIST_STATUS_NOT_CONSTRUCTED;
+    ListStatus status = LIST_STATUS_NOT_CONSTRUCTED;
     #endif
 };
 
@@ -117,20 +116,20 @@ uint32_t    getErrorStatus (List* list);
 const char* getErrorStr    (ListError error);
 bool        listNodesLoop  (List* list);
 
-void        insertAfter    (List* list, list_elem_t value, size_t pos);
-void        insertBefore   (List* list, list_elem_t value, size_t pos);
+int         insertAfter    (List* list, list_elem_t value, size_t pos);
+int         insertBefore   (List* list, list_elem_t value, size_t pos);
 list_elem_t at             (List* list, size_t pos);
 list_elem_t remove         (List* list, size_t pos);
 void        clear          (List* list);
 
-void        pushBack       (List* list, list_elem_t value);
-void        pushFront      (List* list, list_elem_t value);
+int         pushBack       (List* list, list_elem_t value);
+int         pushFront      (List* list, list_elem_t value);
 list_elem_t popBack        (List* list);
 list_elem_t popFront       (List* list);
 list_elem_t topBack        (List* list);
 list_elem_t topFront       (List* list);
 
-size_t      find           (List* list, list_elem_t value);
+bool        find           (List* list, list_elem_t value, int* idx, int* pos);
 
 bool        listOk         (List* list);
 void        dump           (List* list);
@@ -142,4 +141,4 @@ void switchToIndexSearch (List* list);
 int  findIndex           (List* list, size_t pos);
 int  findPos             (List* list, size_t idx);
 
-};
+}

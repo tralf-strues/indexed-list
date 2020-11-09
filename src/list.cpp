@@ -3,7 +3,10 @@
 #include "list.h"
 #include "../libs/log_generator.h"
 
-const unsigned char LIST_MAX_ERRORS_COUNT = 20;
+const unsigned char LIST_MAX_ERRORS_COUNT  = 20;
+const unsigned char LIST_MAX_DOT_CMD_SIZE  = 64;
+const double        LIST_EXPAND_MULTIPLIER = 1.8;
+const size_t        LIST_MINIMAL_CAPACITY  = 4;
 
 struct ListNode
 {
@@ -12,21 +15,9 @@ struct ListNode
     int         next  = -1;
 };
 
-/* TODO
-
-+ 1) function for checking for loops 
-+ ------2) function for getting the last free element------
-- 3) insert returns index where the element was inserted
-- 4) make colors in dump constants
-- 5) get rid off all the magic numbers
-+ 4) fix documentation
-- 5) ask Ded about dump's value length
-
-*/
-
 bool      listFreeLoop    (List* list);
 int       getLastFree     (List* list);
-void      listUpdateFree  (List* list, int begin);
+void      listUpdateFree  (List* list, size_t begin);
 ListNode* resize          (List* list, size_t newCapacity);
 void      setError        (List* list, ListError error);
 void      dumpPrintErrors (List* list, const char* indentation);
@@ -39,10 +30,12 @@ void      dumpGraph       (List* list);
 //! @param [out] list  
 //! @param [in]  begin     
 //-----------------------------------------------------------------------------
-void listUpdateFree(List* list, int begin)
+void listUpdateFree(List* list, size_t begin)
 {
-    assert(list  != NULL);
-    assert(begin >  list->size);
+    assert(list != NULL);
+    assert(begin > list->size);
+
+    if (list->free == 0) { list->free = begin; }
 
     for (size_t i = begin; i < list->capacity; i++)
     {
@@ -50,10 +43,14 @@ void listUpdateFree(List* list, int begin)
         list->nodes[i].value = LIST_POISON;
         #endif
 
-        list->nodes[i].next = list->free;
         list->nodes[i].prev = -1;
 
-        list->free = i;
+        if (list->free == begin && i == list->capacity - 1)
+            list->nodes[i].next = 0;
+        else if (i == list->capacity - 1)
+            list->nodes[i].next = list->free;
+        else
+            list->nodes[i].next = i + 1;
     }
 }
 
@@ -281,7 +278,7 @@ List* fconstructList(List* list, size_t capacity)
     list->head          = 0;
     list->tail          = 0;
     list->free          = 0;
-    list->searchEnabled = false;
+    list->searchEnabled = true;
 
     #ifdef LIST_POISONING_ENABLED
     list->nodes[0].value = LIST_POISON;
@@ -347,7 +344,10 @@ void destructList(List* list)
     list->size     = 0;
     list->capacity = 0;
     list->nodes    = NULL;
+
+    #ifdef LIST_DEBUG_MODE
     list->status   = LIST_STATUS_DESTRUCTED;
+    #endif
 }
 
 //-----------------------------------------------------------------------------
@@ -464,7 +464,7 @@ void setError(List* list, ListError error)
 {
     assert(list != NULL);
 
-    list->errorStatus = list->errorStatus | error;
+    list->errorStatus |= error;
 }
 
 //----------------------------------------------------------------------------- 
@@ -604,7 +604,7 @@ ListNode* resize(List* list, size_t newCapacity)
         listUpdateFree(list, list->size + 1);
     }
 
-    list->searchEnabled = false;
+    list->searchEnabled = true;
 
     ASSERT_LIST_OK(list);
 
@@ -612,161 +612,165 @@ ListNode* resize(List* list, size_t newCapacity)
 }
 
 //-----------------------------------------------------------------------------
-//! Inserts value to list at position pos + 1 (indexing starts from 1). 
+//! Inserts value to list after node with index idx (indexing starts from 1). 
 //!
 //! @param [out] list   
 //! @param [in]  value   
-//! @param [in]  pos   
+//! @param [in]  idx   
 //!
-//! @note If pos = 0, then sets value as the first element in the list.
+//! @note If idx = 0, then sets value as the first element in the list.
 //! @note Can call resize function if there are no free space left.
+//!
+//! @return index at which value was inserted.
 //-----------------------------------------------------------------------------
-void insertAfter(List* list, list_elem_t value, size_t pos)
+int insertAfter(List* list, list_elem_t value, size_t idx)
 {
     ASSERT_LIST_OK(list);
-    assert(pos <= list->size);
+    assert(idx < list->capacity);
+    assert(list->nodes[idx].prev != -1);
 
     if (list->size == list->capacity - 1)
     {
         ListNode* newArray = resize(list, list->capacity * LIST_EXPAND_MULTIPLIER);
 
-        if (newArray == NULL) { return; }
+        if (newArray == NULL) { return 0; }
     }
 
     int newFree = list->nodes[list->free].next;
 
-    if (list->size == 0 && pos == 0)
+    if (list->size == 0)
     {
         list->nodes[list->free].prev = 0;
         list->nodes[list->free].next = 0;
         list->head = list->free;
         list->tail = list->free;
     }
-    else if (pos == list->size)
+    else if (idx == list->tail)
     {
-        // push back
-
         list->nodes[list->free].next = 0;
         list->nodes[list->free].prev = list->tail;
         list->nodes[list->tail].next = list->free;
-        list->tail                   = list->free;
+        list->tail = list->free;
     }
-    else if (pos == 0)
+    else if (idx == 0)
     {
-        // push front
-
         list->nodes[list->free].next = list->head;
         list->nodes[list->free].prev = 0;
         list->nodes[list->head].prev = list->free;
-        list->head                   = list->free;
+        list->head = list->free;
     }
     else
     {
-        int i = LIST_SLOW::findIndex(list, pos);
-
-        assert(i > 0 && i < list->capacity);
-
-        list->nodes[list->free].next          = list->nodes[i].next;
-        list->nodes[list->free].prev          = i;
-        list->nodes[list->nodes[i].next].prev = list->free;
-        list->nodes[i].next                   = list->free;
+        list->nodes[list->free].next            = list->nodes[idx].next;
+        list->nodes[list->free].prev            = idx;
+        list->nodes[list->nodes[idx].next].prev = list->free;
+        list->nodes[idx].next                   = list->free;
     }
+
+    int insertedIndex = list->free;
 
     list->nodes[list->free].value = value;
     list->free = newFree;
     list->size++;
 
-    list->searchEnabled = false;
+    list->searchEnabled = true;
 
     ASSERT_LIST_OK(list);
+
+    return insertedIndex;
 }
 
 //-----------------------------------------------------------------------------
-//! Inserts value to list at position pos - 1 (indexing starts from 1). 
+//! Inserts value to list before node with index idx (indexing starts from 1). 
 //!
 //! @param [out] list   
 //! @param [in]  value   
-//! @param [in]  pos   
+//! @param [in]  idx   
 //!
-//! @note if pos = 0 then sets list's errorStatus to LIST_ACCESSING_ZERO.
+//! @warning if idx = 0 then sets list's errorStatus to LIST_ACCESSING_ZERO and
+//!          returns 0.
 //! @note Can call resize function if there are no free space left.
+//!
+//! @return index at which value was inserted.
 //-----------------------------------------------------------------------------
-void insertBefore(List* list, list_elem_t value, size_t pos)
+int insertBefore(List* list, list_elem_t value, size_t idx)
 {
     ASSERT_LIST_OK(list);
+    assert(list->nodes[idx].prev != -1);
 
-    if (pos == 0)
+    if (idx == 0)
     {
         setError(list, LIST_ACCESSING_ZERO);
-        return;
+        return 0;
     }
 
-    insertAfter(list, value, pos - 1);
+    return insertAfter(list, value, list->nodes[idx].prev);
 }
 
 //-----------------------------------------------------------------------------
-//! Returns element at pos in list (indexing starts from 1). 
+//! Returns element at idx in list (indexing starts from 1). 
 //!
 //! @param [in] list   
-//! @param [in] pos   
+//! @param [in] idx   
 //!
-//! @return element at pos.
+//! @return element at idx.
 //-----------------------------------------------------------------------------
-list_elem_t at(List* list, size_t pos)
+list_elem_t at(List* list, size_t idx)
 {
     ASSERT_LIST_OK(list);
-    assert(pos > 0 && pos <= list->size);
+    assert(idx > 0 && idx < list->capacity);
+    assert(list->nodes[idx].prev != -1);
 
-    return list->nodes[LIST_SLOW::findIndex(list, pos)].value;
+    return list->nodes[idx].value;
 }
 
 //-----------------------------------------------------------------------------
-//! Removes element at pos from list (indexing starts from 1). 
+//! Removes element at idx from list (indexing starts from 1). 
 //!
 //! @param [out] list   
-//! @param [in]  pos   
+//! @param [in]  idx   
 //!
 //! @return element removed.
 //-----------------------------------------------------------------------------
-list_elem_t remove(List* list, size_t pos)
+list_elem_t remove(List* list, size_t idx)
 {
     ASSERT_LIST_OK(list);
-    assert(pos > 0 && pos <= list->size);
+    assert(idx > 0 && idx < list->capacity);
+    assert(list->nodes[idx].prev != -1);
 
-    int         index = LIST_SLOW::findIndex(list, pos);
-    list_elem_t value = list->nodes[index].value;
+    list_elem_t value = list->nodes[idx].value;
 
-    if (list->nodes[index].prev != 0)
+    if (list->nodes[idx].prev != 0)
     {
-        list->nodes[list->nodes[index].prev].next = list->nodes[index].next;
+        list->nodes[list->nodes[idx].prev].next = list->nodes[idx].next;
     }
 
-    if (list->nodes[index].next != 0)
+    if (list->nodes[idx].next != 0)
     {
-        list->nodes[list->nodes[index].next].prev = list->nodes[index].prev;
+        list->nodes[list->nodes[idx].next].prev = list->nodes[idx].prev;
     }
 
     #ifdef LIST_POISONING_ENABLED
-    list->nodes[index].value = LIST_POISON;
+    list->nodes[idx].value = LIST_POISON;
     #endif
 
-    if (pos == 1)
+    if (idx == list->head)
     {
-        list->head = list->nodes[index].next;
+        list->head = list->nodes[idx].next;
     }
 
-    if (pos == list->size)
+    if (idx == list->tail)
     {
-        list->tail = list->nodes[index].prev;
+        list->tail = list->nodes[idx].prev;
     }
 
-    list->nodes[index].prev = -1;
-    list->nodes[index].next = list->free;
-    list->free              = index;
+    list->nodes[idx].prev = -1;
+    list->nodes[idx].next = list->free;
+    list->free            = idx;
 
     list->size--;
 
-    list->searchEnabled = false;
+    list->searchEnabled = true;
 
     ASSERT_LIST_OK(list);
 
@@ -785,7 +789,7 @@ void clear(List* list)
     list->head          = 0;
     list->tail          = 0;
     list->free          = 1;
-    list->searchEnabled = false;
+    list->searchEnabled = true;
     list->size          = 0;
 
     #ifdef LIST_POISONING_ENABLED
@@ -797,8 +801,6 @@ void clear(List* list)
 
     listUpdateFree(list, 1);
 
-    list->searchEnabled = false;
-
     ASSERT_LIST_OK(list);
 }
 
@@ -809,14 +811,14 @@ void clear(List* list)
 //! @param [in]  value    
 //!
 //! @note Can call resize function if there are no free space left.
+//!
+//! @return index at which value was inserted.
 //-----------------------------------------------------------------------------
-void pushBack(List* list, list_elem_t value)
+int pushBack(List* list, list_elem_t value)
 {
     ASSERT_LIST_OK(list);
 
-    insertAfter(list, value, list->size);
-
-    ASSERT_LIST_OK(list);
+    return insertAfter(list, value, list->tail);
 }
 
 //-----------------------------------------------------------------------------
@@ -826,14 +828,14 @@ void pushBack(List* list, list_elem_t value)
 //! @param [in]  value    
 //!
 //! @note Can call resize function if there are no free space left.
+//!
+//! @return index at which value was inserted.
 //-----------------------------------------------------------------------------
-void pushFront(List* list, list_elem_t value)
+int pushFront(List* list, list_elem_t value)
 {
     ASSERT_LIST_OK(list);
 
-    insertAfter(list, value, 0);
-
-    ASSERT_LIST_OK(list);
+    return insertAfter(list, value, 0);
 }
 
 //-----------------------------------------------------------------------------
@@ -847,7 +849,7 @@ list_elem_t popBack(List* list)
 {
     ASSERT_LIST_OK(list);
 
-    return remove(list, list->size);
+    return remove(list, list->tail);
 }
 
 //-----------------------------------------------------------------------------
@@ -861,7 +863,7 @@ list_elem_t popFront(List* list)
 {
     ASSERT_LIST_OK(list);
 
-    return remove(list, 1);
+    return remove(list, list->head);
 }
 
 //-----------------------------------------------------------------------------
@@ -873,7 +875,7 @@ list_elem_t topBack(List* list)
 {
     ASSERT_LIST_OK(list);
 
-    return at(list, list->size);
+    return at(list, list->tail);
 }
 
 //-----------------------------------------------------------------------------
@@ -885,34 +887,43 @@ list_elem_t topFront(List* list)
 {
     ASSERT_LIST_OK(list);
 
-    return at(list, 1);
+    return at(list, list->head);
 }
 
 //-----------------------------------------------------------------------------
-//! Finds the position of the first element with this value in list.
+//! Finds index and position of the first element with this value in list.
 //! 
-//! @param [in] list   
-//! @param [in] value   
+//! @param [in]  list   
+//! @param [in]  value   
+//! @param [out] idx   will be set to the index of the found element (starting 
+//!              from 1) or 0 in case there no such elements in the list.    
+//! @param [out] pos   will be set to the position of the found element (starting 
+//!              from 1) or 0 in case there no such elements in the list.  
 //!
-//! @return position of the found element (starting from 1) or 0 in case there
-//!         no such elements in the list.
+//! @return whether or not element with this value has been found.
 //-----------------------------------------------------------------------------
-size_t find(List* list, list_elem_t value)
+bool find(List* list, list_elem_t value, int* idx, int* pos)
 {
     ASSERT_LIST_OK(list);
 
-    size_t index = list->head;
+    int index = list->head;
     for (size_t i = 1; i <= list->size; i++)
     {
         if (list->nodes[index].value == value)
         {
-            return i;
+            *idx = index;
+            *pos = i;
+
+            return true;
         }
 
         index = list->nodes[index].next;
     }
 
-    return 0;
+    *idx = 0;
+    *pos = 0;
+
+    return false;
 }
 
 namespace LIST_SLOW
@@ -975,7 +986,7 @@ void switchToIndexSearch(List* list)
 
     LIST_SET_CANARIES(list);    
 
-    list->searchEnabled = true;
+    list->searchEnabled = false;
 
     ASSERT_LIST_OK(list);
 }
@@ -990,12 +1001,12 @@ void switchToIndexSearch(List* list)
 //-----------------------------------------------------------------------------
 int findIndex(List* list, size_t pos)
 {
-    assert(list        != NULL);
+    assert(list != NULL);
     assert(list->nodes != NULL);
-    assert(list->size  >= pos);
-    assert(pos         >= 1);
+    assert(list->size >= pos);
+    assert(pos >= 1);
 
-    if (list->searchEnabled) { return pos; }
+    if (!list->searchEnabled) { return pos; }
 
     size_t index = list->head;
     for (size_t i = 1; i < pos; i++)
@@ -1016,12 +1027,12 @@ int findIndex(List* list, size_t pos)
 //-----------------------------------------------------------------------------
 int findPos(List* list, size_t idx)
 {
-    assert(list        != NULL);
+    assert(list != NULL);
     assert(list->nodes != NULL);
 
     if (list->nodes[idx].prev == -1) { return 0; }
 
-    if (list->searchEnabled) { return idx; }
+    if (!list->searchEnabled) { return idx; }
 
     int pos = 1;
     while (list->nodes[idx].prev != 0)
@@ -1083,7 +1094,6 @@ bool listOk(List* list)
 
     if (listFreeLoop(list))
     {
-        printf("HERE?\n");
         setError(list, LIST_FREE_LIST_LOOP);
         return false;
     }
@@ -1153,37 +1163,41 @@ void dumpGraph(List* list)
 {
     assert(list != NULL);
 
-    FILE* graphFile = fopen(LIST_GRAPH_TXT_FILE_NAME, "w");
+    char* tempBuffer = (char*) calloc(LIST_MAX_DOT_CMD_SIZE, sizeof(char));
+    assert(tempBuffer != NULL);
+
+    snprintf(tempBuffer, LIST_MAX_DOT_CMD_SIZE, "%s%s", LIST_LOG_FOLDER, LIST_GRAPH_TXT_FILE_NAME);
+
+    FILE* graphFile = fopen(tempBuffer, "w");
     assert(graphFile != NULL);
 
     fprintf(graphFile,
             "digraph structs {\n"
             "\trankdir=TB;\n\n"
             "\tnode [shape=\"record\", style=\"filled\", color=\"#000000\", fillcolor=\"#90EE90\"];\n\n"
-            "\t{ rank = same; NULL; HEAD; TAIL }\n\n"
+            "\t{ rank = same; HEAD; NULL; TAIL }\n\n"
             "\tHEAD [label=\"Head\", fontsize=16.0, fontcolor=\"#F0FFFF\", fillcolor=\"#7B68EE\"];\n"
-            "\tTAIL [label=\"Tail\", fontsize=16.0, fontcolor=\"#F0FFFF\", fillcolor=\"#7B68EE\"];\n"
-            "\tNULL [label=\"NULL\", fontsize=16.0, fontcolor=\"#F0FFFF\", fillcolor=\"#DC143C\"];\n\n"
+            "\tNULL [label=\"NULL\", fontsize=16.0, fontcolor=\"#F0FFFF\", fillcolor=\"#DC143C\"];\n"
+            "\tTAIL [label=\"Tail\", fontsize=16.0, fontcolor=\"#F0FFFF\", fillcolor=\"#7B68EE\"];\n\n"
             "\tHEAD->NODE1[style=invis];\n"
-            "\tTAIL->NODE1[style=invis];\n"
-            "\tNULL->NODE1[style=invis];\n\n");
+            "\tTAIL->NODE1[style=invis];\n\n");
 
     for (size_t i = 1; i < list->capacity; i++)
     {
-        fprintf(graphFile, "\tNODE%lu [label=\"{", i);
+        fprintf(graphFile, "\tNODE%u [label=\"{", i);
 
         // if not free node
         if (list->nodes[i].prev != -1)
         {
             fprintf(graphFile,
-                    "[%lu] %lg|{pos\\n%lu|",
+                    "[%u] %lg|{pos\\n%d|",
                     i,
                     list->nodes[i].value,
                     LIST_SLOW::findPos(list, i));
         }
         else
         {
-            fprintf(graphFile, "[%lu] FREE|{", i);
+            fprintf(graphFile, "[%u] FREE|{", i);
         }
 
         fprintf(graphFile, "<nxt>nxt\\n");
@@ -1202,7 +1216,7 @@ void dumpGraph(List* list)
 
         if (i < list->capacity - 1) 
         { 
-            fprintf(graphFile, "\tNODE%lu->NODE%lu[style=invis];\n", i, i + 1); 
+            fprintf(graphFile, "\tNODE%u->NODE%u[style=invis];\n", i, i + 1); 
         }
     }
 
@@ -1210,20 +1224,16 @@ void dumpGraph(List* list)
     {
         if (list->nodes[i].prev != -1 && list->nodes[list->nodes[i].next].prev != -1)
         {
-            fprintf(graphFile, "\n\tNODE%lu:<nxt> -> ", i);
-
-            if (list->nodes[i].next == 0)  { fprintf(graphFile, "NULL"); }
-            else                           { fprintf(graphFile, "NODE%d", list->nodes[i].next); }
-
-            if (list->nodes[i].prev != -1) { fprintf(graphFile, " [constraint=false];\n"); }
-            else                           { fprintf(graphFile, " [color=\"#FFA07A\", constraint=false];\n\n"); }
-
-            if (list->nodes[i].prev != -1)
+            if (list->nodes[i].next != 0)
             {
-                fprintf(graphFile, "\tNODE%lu:<prv> -> ", i);
+                fprintf(graphFile, "\n\tNODE%u:<nxt> -> NODE%u [constraint=false];\n", 
+                        i, list->nodes[i].next);
+            }
 
-                if (list->nodes[i].prev == 0) { fprintf(graphFile, "NULL [color=\"#A9A9A9\", style=\"dashed\"];\n\n"); }
-                else                          { fprintf(graphFile, "NODE%d [color=\"#A9A9A9\", style=\"dashed\", constraint=false];\n\n", list->nodes[i].prev); }
+            if (list->nodes[i].prev != 0)
+            {
+                fprintf(graphFile, "\n\tNODE%u:<prv> -> NODE%u [color=\"#A9A9A9\", style=\"dashed\", constraint=false];\n",
+                        i, list->nodes[i].prev);
             }
         }
     }
@@ -1240,9 +1250,21 @@ void dumpGraph(List* list)
 
     fclose(graphFile);
 
-    system("dot -Tsvg log/list_dump.txt > log/list_dump.svg");
+    snprintf(tempBuffer, 
+             LIST_MAX_DOT_CMD_SIZE,
+             "dot -Tsvg %s%s > %s%s", 
+             LIST_LOG_FOLDER, 
+             LIST_GRAPH_TXT_FILE_NAME, 
+             LIST_LOG_FOLDER, 
+             LIST_GRAPH_IMG_FILE_NAME);
 
-    LG_AddImage("list_dump.svg", "max-width: 280px;");
+    printf("%s\n", tempBuffer);
+
+    system(tempBuffer);
+
+    free(tempBuffer);
+
+    LG_AddImage(LIST_GRAPH_IMG_FILE_NAME, "max-width: 280px;");
 }
 
 //-----------------------------------------------------------------------------
@@ -1263,92 +1285,82 @@ void dump(List* list)
     LG_Write("List (");
     dumpPrintErrors(list, "      ");
 
-    if ((list->errorStatus & LIST_NOT_CONSTRUCTED_USE) != 0 || (list->errorStatus & LIST_DESTRUCTED_USE) != 0)
+    LG_Write(") [0x%X] \"%s\"\n"
+             "{\n"  
+             "    size          = %lu\n"
+             "    capacity      = %lu\n"
+             "    head          = %d\n"
+             "    tail          = %d\n"
+             "    free          = %d\n"
+             "    searchEnabled = %d\n"
+             "    nodes [0x%X]\n"
+             "    {\n"
+              
+             #ifdef LIST_CANARIES_ENABLED
+             "        canaryL: 0x%lX | must be 0x%lX\n"
+             "        canaryR: 0x%lX | must be 0x%lX\n"
+             #endif
+             ,
+              
+             list, 
+              
+             #ifdef LIST_DEBUG_MODE
+             list->name, 
+             #else
+             LIST_DEFAULT_NOT_DEBUG_NAME, 
+             #endif
+             
+             list->size,
+             list->capacity,
+             list->head,
+             list->tail,
+             list->free,
+             list->searchEnabled,
+             list->nodes
+              
+             #ifdef LIST_CANARIES_ENABLED
+             ,getCanary((void*)list->nodes, list->capacity * sizeof(ListNode), 'l'),
+              LIST_ARRAY_CANARY_L,
+              getCanary((void*)list->nodes, list->capacity * sizeof(ListNode), 'r'),
+              LIST_ARRAY_CANARY_R
+             #endif  
+    );
+           
+    for (size_t i = 0; i < list->capacity; i++)
     {
-        LG_Write(") [0x%X] \n", list);
-    }
-    else
-    {
-        LG_Write(") [0x%X] "
-
-                 #ifdef LIST_DEBUG_MODE
-                 "\"%s\""
-                 #endif
-
-                 "\n"
-                 "{\n"  
-                 "    size          = %lu\n"
-                 "    capacity      = %lu\n"
-                 "    head          = %d\n"
-                 "    tail          = %d\n"
-                 "    free          = %d\n"
-                 "    searchEnabled = %d\n"
-                 "    nodes [0x%X]\n"
-                 "    {\n"
-
-                 #ifdef LIST_CANARIES_ENABLED
-                 "        canaryL: 0x%lX | must be 0x%lX\n"
-                 "        canaryR: 0x%lX | must be 0x%lX\n"
-                 #endif
-                 ,
-
-                 list, 
-
-                 #ifdef LIST_DEBUG_MODE
-                 list->name, 
-                 #endif
-
-                 list->size,
-                 list->capacity,
-                 list->head,
-                 list->tail,
-                 list->free,
-                 list->searchEnabled,
-                 list->nodes
-                 
-                 #ifdef LIST_CANARIES_ENABLED
-                 ,getCanary((void*)list->nodes, list->capacity * sizeof(ListNode), 'l'),
-                  LIST_ARRAY_CANARY_L,
-                  getCanary((void*)list->nodes, list->capacity * sizeof(ListNode), 'r'),
-                  LIST_ARRAY_CANARY_R
-                 #endif  
-        );
-
-        for (size_t i = 0; i < list->capacity; i++)
+        if (i == 0)
         {
-            if (i == 0)
-            {
-                LG_Write("        ![%lu]\t= ", i);
-            }
-            else if (list->nodes[i].prev != -1)
-            {
-                LG_Write("        *[%lu]\t= ", i);
-            }
-            else
-            {
-                LG_Write("         [%lu]\t= ", i);
-            }
-
-            LG_Write("[value=%-7lg, next=%-4d, prev=%-4d]", list->nodes[i].value,
-                                                            list->nodes[i].next,
-                                                            list->nodes[i].prev);
-
-            #ifdef LIST_POISONING_ENABLED
-            if (IS_LIST_POISON(list->nodes[i].value))
-            {
-                LG_Write(" (POISON!)");
-            }
-            #endif
-
-            LG_Write("\n");
+            LG_Write("        ![%lu]\t= ", i);
         }
-
-        LG_Write("    }\n");
-
-        dumpGraph(list);
-
-        LG_Write("\n}\n");
+        else if (list->nodes[i].prev != -1)
+        {
+            LG_Write("        *[%lu]\t= ", i);
+        }
+        else
+        {
+            LG_Write("         [%lu]\t= ", i);
+        }
+        
+        LG_Write("[value=%-7lg, next=%-4d, prev=%-4d]", list->nodes[i].value,
+                                                        list->nodes[i].next,
+                                                        list->nodes[i].prev);
+         
+        #ifdef LIST_POISONING_ENABLED
+        if (IS_LIST_POISON(list->nodes[i].value))
+        {
+            LG_Write(" (POISON!)");
+        }
+        #endif
+           
+        LG_Write("\n");
     }
+       
+    LG_Write("    }\n");
+     
+    dumpGraph(list);
+     
+    LG_Write("\n}\n");
+    
 
     LG_WriteMessageEnd();
 }
