@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head><link rel="stylesheet" href="log.css"></head>
+<body>
+
+<pre style="color: rgb(0, 0, 0);">
+List (<span class="LG_GOOD">LIST_NO_ERROR</span>) [0x4B26200] "list"
+{
+    size          = 9
+    capacity      = 16
+    head          = 1
+    tail          = 8
+    free          = 7
+    searchEnabled = 1
+    nodes [0x44B0FEB4]
+    {
+        canaryL: 0xBADC0FFE | must be 0xBADC0FFE
+        canaryR: 0xDEADBEEF | must be 0xDEADBEEF
+        ![0]	= [value=nan    , next=0   , prev=0   ] (POISON!)
+        *[1]	= [value=0      , next=2   , prev=0   ]
+        *[2]	= [value=1.5    , next=3   , prev=1   ]
+        *[3]	= [value=3      , next=4   , prev=2   ]
+        *[4]	= [value=4.5    , next=5   , prev=3   ]
+        *[5]	= [value=6      , next=6   , prev=4   ]
+        *[6]	= [value=7.5    , next=10  , prev=5   ]
+         [7]	= [value=nan    , next=11  , prev=-1  ] (POISON!)
+        *[8]	= [value=10.5   , next=0   , prev=9   ]
+        *[9]	= [value=2020   , next=8   , prev=10  ]
+        *[10]	= [value=2021   , next=9   , prev=6   ]
+         [11]	= [value=nan    , next=12  , prev=-1  ] (POISON!)
+         [12]	= [value=nan    , next=13  , prev=-1  ] (POISON!)
+         [13]	= [value=nan    , next=14  , prev=-1  ] (POISON!)
+         [14]	= [value=nan    , next=15  , prev=-1  ] (POISON!)
+         [15]	= [value=nan    , next=0   , prev=-1  ] (POISON!)
+    }
+<img style="max-width: 280px;" src="list_dump.svg" alt="No image">
+}
+
+</pre>
+
+</body>
+</html>

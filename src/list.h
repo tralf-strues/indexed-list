@@ -116,10 +116,10 @@ uint32_t    getErrorStatus (List* list);
 const char* getErrorStr    (ListError error);
 bool        listNodesLoop  (List* list);
 
-int         insertAfter    (List* list, list_elem_t value, size_t pos);
-int         insertBefore   (List* list, list_elem_t value, size_t pos);
-list_elem_t at             (List* list, size_t pos);
-list_elem_t remove         (List* list, size_t pos);
+int         insertAfter    (List* list, list_elem_t value, size_t idx);
+int         insertBefore   (List* list, list_elem_t value, size_t idx);
+list_elem_t at             (List* list, size_t idx);
+list_elem_t remove         (List* list, size_t idx);
 void        clear          (List* list);
 
 int         pushBack       (List* list, list_elem_t value);

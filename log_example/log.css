@@ -1,0 +1,15 @@
+.LG_ERROR {
+    font-size:100%;
+    color: red;
+    font-weight: bold;
+}
+
+.LG_GOOD {
+    font-size:100%;
+    color: lime;
+    font-weight: bold;
+}
+
+.LG_DEFAULT {
+    color: black;
+}

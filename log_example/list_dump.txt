@@ -1,0 +1,78 @@
+digraph structs {
+	rankdir=TB;
+
+	node [shape="record", style="filled", color="#000000", fillcolor="#90EE90"];
+
+	{ rank = same; HEAD; NULL; TAIL }
+
+	HEAD [label="Head", fontsize=16.0, fontcolor="#F0FFFF", fillcolor="#7B68EE"];
+	NULL [label="NULL", fontsize=16.0, fontcolor="#F0FFFF", fillcolor="#DC143C"];
+	TAIL [label="Tail", fontsize=16.0, fontcolor="#F0FFFF", fillcolor="#7B68EE"];
+
+	HEAD->NODE1[style=invis];
+	TAIL->NODE1[style=invis];
+
+	NODE1 [label="{[1] 0|{pos\n1|<nxt>nxt\n2|<prv>prv\nNULL}}"];
+	NODE1->NODE2[style=invis];
+	NODE2 [label="{[2] 1.5|{pos\n2|<nxt>nxt\n3|<prv>prv\n1}}"];
+	NODE2->NODE3[style=invis];
+	NODE3 [label="{[3] 3|{pos\n3|<nxt>nxt\n4|<prv>prv\n2}}"];
+	NODE3->NODE4[style=invis];
+	NODE4 [label="{[4] 4.5|{pos\n4|<nxt>nxt\n5|<prv>prv\n3}}"];
+	NODE4->NODE5[style=invis];
+	NODE5 [label="{[5] 6|{pos\n5|<nxt>nxt\n6|<prv>prv\n4}}"];
+	NODE5->NODE6[style=invis];
+	NODE6 [label="{[6] 7.5|{pos\n6|<nxt>nxt\n10|<prv>prv\n5}}"];
+	NODE6->NODE7[style=invis];
+	NODE7 [label="{[7] FREE|{<nxt>nxt\n11|<prv>prv\n-1}}", fillcolor="#FFA07A"];
+	NODE7->NODE8[style=invis];
+	NODE8 [label="{[8] 10.5|{pos\n9|<nxt>nxt\nNULL|<prv>prv\n9}}"];
+	NODE8->NODE9[style=invis];
+	NODE9 [label="{[9] 2020|{pos\n8|<nxt>nxt\n8|<prv>prv\n10}}"];
+	NODE9->NODE10[style=invis];
+	NODE10 [label="{[10] 2021|{pos\n7|<nxt>nxt\n9|<prv>prv\n6}}"];
+	NODE10->NODE11[style=invis];
+	NODE11 [label="{[11] FREE|{<nxt>nxt\n12|<prv>prv\n-1}}", fillcolor="#FFA07A"];
+	NODE11->NODE12[style=invis];
+	NODE12 [label="{[12] FREE|{<nxt>nxt\n13|<prv>prv\n-1}}", fillcolor="#FFA07A"];
+	NODE12->NODE13[style=invis];
+	NODE13 [label="{[13] FREE|{<nxt>nxt\n14|<prv>prv\n-1}}", fillcolor="#FFA07A"];
+	NODE13->NODE14[style=invis];
+	NODE14 [label="{[14] FREE|{<nxt>nxt\n15|<prv>prv\n-1}}", fillcolor="#FFA07A"];
+	NODE14->NODE15[style=invis];
+	NODE15 [label="{[15] FREE|{<nxt>nxt\nNULL|<prv>prv\n-1}}", fillcolor="#FFA07A"];
+
+	NODE1:<nxt> -> NODE2 [constraint=false];
+
+	NODE2:<nxt> -> NODE3 [constraint=false];
+
+	NODE2:<prv> -> NODE1 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE3:<nxt> -> NODE4 [constraint=false];
+
+	NODE3:<prv> -> NODE2 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE4:<nxt> -> NODE5 [constraint=false];
+
+	NODE4:<prv> -> NODE3 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE5:<nxt> -> NODE6 [constraint=false];
+
+	NODE5:<prv> -> NODE4 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE6:<nxt> -> NODE10 [constraint=false];
+
+	NODE6:<prv> -> NODE5 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE8:<prv> -> NODE9 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE9:<nxt> -> NODE8 [constraint=false];
+
+	NODE9:<prv> -> NODE10 [color="#A9A9A9", style="dashed", constraint=false];
+
+	NODE10:<nxt> -> NODE9 [constraint=false];
+
+	NODE10:<prv> -> NODE6 [color="#A9A9A9", style="dashed", constraint=false];
+	HEAD -> NODE1 [color="#7B68EE"];
+	TAIL -> NODE8 [color="#7B68EE"];
+}
